@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd">
+	
+	<configuration-properties file="app.properties"/>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="d50685df-b1cf-4647-954a-a461a59d0d27" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="2faf3c98-66eb-40f0-8f63-e7c35a9d03fe" >
+		<file:connection workingDir="C:\Users\JARVIS7\AnypointStudio\practice-workspace\sonic-groovy-dw\src\main\resources\files" />
+	</file:config>
+	<json-logger:config name="JSON_Logger_Config" doc:name="JSON Logger Config" doc:id="4188c3e9-0cf6-4694-bf5b-311c8230f929" environment="${json.logger.env}" />
+	<flow name="sonic-groovy-dw-priceNotification" doc:id="a766f62b-8a5c-4f91-83f3-38749827b583" >
+		<http:listener doc:name="Listener" doc:id="1858fd7b-2b5b-4943-9b28-eb9b1e9fb2e8" config-ref="HTTP_Listener_config" path="/priceNotification"/>
+		<ee:transform doc:name="Transform Message" doc:id="ec9178b1-d981-4ef4-b7a0-7d6473930642" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="errorInContextName" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(payload.ContextName == null or lower(payload.ContextName) == "null" or lower(payload.ContextName) == "")
+		"ContextName": payload.ContextName ++ " is invalid (cannot be null or empty)"
+else("")
+else("")]]></ee:set-variable>
+				<ee:set-variable variableName="errorInEvent" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(payload.Event == null or lower(payload.Event) == "null" or lower(payload.Event) == "")
+		 "Event": payload.Event ++ " is invalid (cannot be null or empty)"
+else("")
+else("")]]></ee:set-variable>
+				<ee:set-variable variableName="errorInEventDate" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(payload.EventDate == null or lower(payload.EventDate) == "null" or lower(payload.EventDate) == "")
+		"EventDate" : payload.EventDate ++ " is invalid (cannot be null or empty)"
+else("")
+else("")]]></ee:set-variable>
+				<ee:set-variable variableName="checkEvent" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(lower(payload.Event) =="price_deadline_upcoming" or lower(payload.Event) =="price_deadline_expired") (
+	if(sizeOf(payload.MenuContacts) == 0)
+		{"MenuContacts" : " is invalid (cannot be null or empty)"}
+	else("")
+) else if(lower(payload.Event) =="price_window_open") (
+	if(payload.MenuContacts != null)
+		{"MenuContacts" : " is invalid (must not be present)"}
+	else("")
+)else(
+	{"Event" : payload.Event ++ " is invalid (is not a valid event)"}
+)
+else("")]]></ee:set-variable>
+				<ee:set-variable variableName="checkMenuContactsName" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {})(
+	if(lower(payload.Event) =="price_deadline_upcoming" or lower(payload.Event) =="price_deadline_expired") (
+	payload.MenuContacts map (value, index) -> (
+		if(value.Name == null or value.Name == "") 
+		vars.checkMenuContactsName default [] + {"Stores" : " is invalid (cannot be null or empty)"}
+		else vars.checkMenuContactsName default []
+	)
+) else vars.checkMenuContactsName default []
+)
+else vars.checkMenuContactsName default [{}]]]></ee:set-variable>
+				<ee:set-variable variableName="checkMenuContactsStores" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(lower(payload.Event) =="price_deadline_upcoming" or lower(payload.Event) =="price_deadline_expired") (
+	payload.MenuContacts map (value, index) -> (
+		if(value.Stores == null or sizeOf(value.Stores) == 0) 
+		vars.checkMenuContactsStores default [] + {"Stores" : " is invalid (cannot be null or empty)"}
+		else vars.checkMenuContactsStores default []
+	)
+) else vars.checkMenuContactsStores default []
+else vars.checkMenuContactsStores default []]]></ee:set-variable>
+				<ee:set-variable variableName="errorInContextId" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {}) 
+if(payload.ContextId as String == null or lower(payload.ContextId as String) == "null" or lower(payload.ContextId as String) == "")
+	"ContextId" : payload.ContextId as String ++ " is invalid (cannot be null or empty)"
+else("")
+else("")]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="0c3fef35-270f-4069-9675-7c7c22e66983" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var errors = [vars.errorInContextId, vars.errorInContextName, vars.errorInEvent, 
+		vars.errorInEventDate, vars.checkEvent]
+var errorList = [vars.checkMenuContactsName, 
+		vars.checkMenuContactsStores]
+---
+if(vars.errorInContextId == "" and vars.errorInContextName == "" and vars.errorInEvent == "" and 
+		vars.errorInEventDate == "" and vars.checkEvent == "" and sizeOf(vars.checkMenuContactsName) == 1 and 
+		sizeOf(vars.checkMenuContactsStores) == 1)
+	payload
+else (
+	flatten (errors filter (value, index) -> (!(value == ""))) ++
+	flatten (errorList filter (value, index) -> (sizeOf(value) > 1))
+	
+)
+	]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="d6149d05-b1be-47d2-bc8b-311b91a106ff" message='End of price Notification flow  \n #[payload]'/>
+	</flow>
+	<flow name="testFlow" doc:id="399bcea9-7a17-4275-9abd-998756eeae6b" >
+		<http:listener doc:name="Listener" doc:id="601733d3-b203-43e4-99f4-a278e46a4338" config-ref="HTTP_Listener_config" path="/testFlow"/>
+		<ee:transform doc:name="Transform Message" doc:id="7400e5c7-c8c5-4c2f-8fc9-1e8a23ec5ef3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="44949a54-1c41-41a9-9977-5c7738ba690e" message="End of Test flow"/>
+	</flow>
+	<flow name="storeChecksumTransformer" doc:id="77158bb3-e20d-490b-adfc-a96793cfaf37" >
+		<http:listener doc:name="Listener" doc:id="1bb9be1e-94f2-45ec-aa0c-4095959b0c43" config-ref="HTTP_Listener_config" path="/storeChecksumTransformer"/>
+		<ee:transform doc:name="Transform Message" doc:id="f25c3235-067e-4a75-ad42-22d25ae2d465" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="sonicStoresList" ><![CDATA[%dw 2.0
+output application/java
+---
+	(if(payload != null and payload != {}) (
+		flatten (payload[0] map (value, index) -> (
+			if(value.STORE_ID > 999) (
+				vars.sonicStoresList default [] + {
+					"contextId": value.CONTEXT_ID,
+					"storeId": value.STORE_ID,
+					"checksumVal": value.CHECKSUM as String {format: "0.00", roundMode:"HALF_EVEN"},
+					"action": "delete",
+					"threshold": "0.0001"
+				}
+			) else (vars.sonicStoresList default [])
+		)
+		)
+		) else (vars.sonicStoresList default [])
+)]]></ee:set-variable>
+				<ee:set-variable variableName="smStoresList" ><![CDATA[%dw 2.0
+output application/java
+var jsonObj1 = payload[1][0] //message.getInvocationProperty("smChecksumPayload")
+---
+ flatten (if(payload != null and payload != {}) (
+	jsonObj1.Stores map (value, index) -> (
+			if(value.Store > 999 and value.Checksum > 0) (
+				vars.smStoresList default [] + {
+					"contextId": jsonObj1.ContextId,
+					"storeId": value.Store,
+					"checksumVal": value.Checksum as String {format: "0.00", roundMode:"HALF_EVEN"},
+					"action": "update",
+					"threshold": "0.0001"
+				}
+			) else vars.smStoresList default []
+		)
+	) else vars.smStoresList default []
+)]]></ee:set-variable>
+				<ee:set-variable variableName="jsonObj" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {})
+	{"Stores": payload[1].Stores} //message.getInvocationProperty("smChecksumPayload")
+else ""]]></ee:set-variable>
+				<ee:set-variable variableName="isPayloadNull" ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload != null and payload != {})
+	false
+else true]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="a5b2a237-b560-40d0-8ca6-d64b5f81607a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="explicitDelete" ><![CDATA[%dw 2.0
+output application/java
+var delete = (vars.sonicStoresList -- vars.sonicStoresList)
+var update = (vars.smStoresList -- vars.sonicStoresList)
+---
+if(!vars.isPayloadNull)
+update map (value, index) -> (
+	delete map (subvalue, subindex) -> (
+		if(value.storeId == subvalue.storeId)
+			vars.explicitDelete default delete - subvalue
+			else vars.explicitDelete default delete
+	)
+)
+else []]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="596b9b0e-dd20-4ef1-b5a2-b3a024c52f4b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="union" ><![CDATA[%dw 2.0
+output application/java
+var union = (vars.explicitDelete ++ vars.smStoresList) default []
+---
+union]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="4c87cfb7-c442-4264-8fa8-b12b3ef5c9b4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+if(!vars.isPayloadNull)
+{
+	"Context": payload[1][0].ContextId,
+	"Stores":  (vars.union filter (value,index) -> (sizeOf(value)>1)) orderBy $.storeId
+}
+else
+{
+	"Context": payload[1][0].ContextId,
+	"Stores":  []
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="f1d4aa86-7714-43f9-88ae-8d871faba903" message="End of StoreChecksumFlow"/>
+	</flow>
+</mule>
